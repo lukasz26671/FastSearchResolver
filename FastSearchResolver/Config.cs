@@ -6,6 +6,7 @@ public record Config
     public required string DefaultBang { get; init; }
     public required bool UseCustomBind { get; init; }
     public required string MainBangs { get; init; }
+    public required bool UseRestartEndpoint { get; init; }
     public string? CustomBangs { get; init; }
     public int? HttpPort { get; init; }
     public int? HttpsPort { get; init; }

@@ -8,14 +8,14 @@ namespace FastSearchResolver;
 internal static partial class Program
 {
     private static string _defaultBangKey = null!;
-    private static readonly BangsMap Engines;
+    private static BangsMap Engines;
     
     private static BangDefinition DefaultBang => Engines[_defaultBangKey];
     private static readonly Regex BangPrefixRegex = BangPrefixSearchRegex();
     private static readonly Regex BangSuffixRegex = BangSuffixSearchRegex();
     private static readonly Config Config = Config.LoadFromJson("config.json");
 
-    static Program()
+    private static void LoadBangDefinitions()
     {
         List<BangDefinition> bangDefinitions = [];
 
@@ -34,8 +34,12 @@ internal static partial class Program
         Engines = bangDefinitions
             .ToImmutableDictionary(x => x.Tag, x => x, StringComparer.OrdinalIgnoreCase);
 
-        _defaultBangKey = Config.DefaultBang;
         Console.WriteLine($"Loaded {Engines.Count} usable bangs");
+    }
+    static Program()
+    {
+        _defaultBangKey = Config.DefaultBang;
+        LoadBangDefinitions();
         Console.WriteLine($"Using default bang key: {_defaultBangKey}");
     }
     
@@ -91,6 +95,15 @@ internal static partial class Program
             context.Response.Headers.Append("Cache-Control", "public, max-age=31536000, immutable");
             return await GetReadFileResult(context, "index.html");
         });
+
+        if (Config.UseRestartEndpoint)
+        {
+            app.MapGet("/reload", () =>
+            {
+                LoadBangDefinitions();
+                return Results.Redirect("/");
+            });
+        }
 
         app.MapGet("/static/{fileName}", async (HttpContext context, string fileName) =>
         {

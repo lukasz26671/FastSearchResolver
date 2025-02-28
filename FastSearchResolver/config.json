@@ -3,6 +3,7 @@
   "MainBangs": "bang.json",
   "CustomBangs": "bang_custom.json",
   "UseCustomBind": false,
+  "UseRestartEndpoint": false,
   "HttpPort": 8080,
   "HttpsPort": 8443,
   "UseHttps": false,
