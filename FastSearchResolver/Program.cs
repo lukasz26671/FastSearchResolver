@@ -98,7 +98,7 @@ internal static partial class Program
             return await GetReadFileResult(context, "index.html");
         });
 
-        if (Config.UseRestartEndpoint)
+        if (Config.UseReloadEndpoint)
         {
             app.MapGet("/reload", () =>
             {
