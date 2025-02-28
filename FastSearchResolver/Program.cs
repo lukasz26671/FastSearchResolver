@@ -12,8 +12,9 @@ internal static partial class Program
         .ToImmutableDictionary(x => x.Tag, x => x, StringComparer.OrdinalIgnoreCase);
     
     private static BangDefinition DefaultBang => Engines[_defaultBangKey];
-    private static readonly Regex BangRegex = BangSearchRegex();
-    
+    private static readonly Regex BangPrefixRegex = BangPrefixSearchRegex();
+    private static readonly Regex BangSuffixRegex = BangSuffixSearchRegex();
+    private static readonly Config Config = Config.LoadFromJson("config.json");
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateSlimBuilder(args);
@@ -24,34 +25,30 @@ internal static partial class Program
             options.SerializerOptions.TypeInfoResolverChain.Insert(1, ConfigJsonContext.Default);
         });
         
-        var config = Config.LoadFromJson("config.json");
-        _defaultBangKey = config.DefaultBang;
+        _defaultBangKey = Config.DefaultBang;
         Console.WriteLine($"Using default bang key: {_defaultBangKey}");
-
-        if (config.UseCustomBind)
+        if (Config.UseCustomBind)
         {
             builder.WebHost.ConfigureKestrel(o =>
             {
+                Console.WriteLine($"Using custom http binding: 0.0.0.0:{Config.HttpPort!.Value}");
 
-                Console.WriteLine($"Using custom http binding: 0.0.0.0:{config.HttpPort!.Value}");
-
-                if (config.UseHttps.GetValueOrDefault())
+                if (Config.UseHttps.GetValueOrDefault())
                 {
-                    Console.WriteLine($"Using custom https binding: 0.0.0.0:{config.HttpsPort!.Value}");
+                    Console.WriteLine($"Using custom https binding: 0.0.0.0:{Config.HttpsPort!.Value}");
                     o.ConfigureEndpointDefaults(lo => lo.Protocols = HttpProtocols.Http1AndHttp2AndHttp3);
                 }
 
-
                 // Always enable HTTP
-                o.ListenAnyIP(config.HttpPort!.Value);
+                o.ListenAnyIP(Config.HttpPort!.Value);
 
                 // Enable HTTPS if configured
-                if (config.UseHttps.GetValueOrDefault() && !string.IsNullOrEmpty(config.CertificatePath))
+                if (Config.UseHttps.GetValueOrDefault() && !string.IsNullOrEmpty(Config.CertificatePath))
                 {
-                    o.ListenAnyIP(config.HttpsPort!.Value,
+                    o.ListenAnyIP(Config.HttpsPort!.Value,
                         listenOptions =>
                         {
-                            listenOptions.UseHttps(config.CertificatePath, config.CertificatePassword);
+                            listenOptions.UseHttps(Config.CertificatePath, Config.CertificatePassword);
                         });
                 }
 
@@ -60,7 +57,7 @@ internal static partial class Program
 
         var app = builder.Build();
 
-        app.MapGet("/", (HttpContext context) =>
+        app.MapGet("/", async (HttpContext context) =>
         {
             var query = context.Request.Query["q"];
             if (!string.IsNullOrEmpty(query))
@@ -70,13 +67,13 @@ internal static partial class Program
             }
 
             context.Response.Headers.Append("Cache-Control", "public, max-age=31536000, immutable");
-            return GetReadFileResult("index.html");
+            return await GetReadFileResult(context, "index.html");
         });
 
-        app.MapGet("/static/{fileName}", (HttpContext context, string fileName) =>
+        app.MapGet("/static/{fileName}", async (HttpContext context, string fileName) =>
         {
             context.Response.Headers.Append("Cache-Control", "public, max-age=31536000, immutable");
-            return GetReadFileResult(fileName);
+            return await GetReadFileResult(context, fileName);
         });
 
         app.Run();
@@ -92,17 +89,20 @@ internal static partial class Program
         var redirectUrl = GetBangRedirectUrl(query);
         return redirectUrl == null ? Results.UnprocessableEntity() : Results.Redirect(redirectUrl, permanent: true);
     }
-    private static IResult GetReadFileResult(string? relativePath)
+    private static async Task<IResult> GetReadFileResult(HttpContext context, string? relativePath)
     {
         if (relativePath == null)
             return Results.BadRequest();
 
         var finalPath = Path.Combine(Directory.GetCurrentDirectory(), "static", relativePath);
-        
         try
         {
-            var fs = new FileStream(finalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return Results.File(fs, contentType: GetContentType(finalPath));
+            var contentType = GetContentType(finalPath);
+            if (!relativePath.EndsWith("opensearch.xml"))
+                return Results.File(new FileStream(finalPath, FileMode.Open, FileAccess.Read, FileShare.Read), contentType);
+            
+            var content = (await File.ReadAllTextAsync(finalPath)).Replace("%{PUBLIC_URL}%", $"{context.Request.Scheme}://{context.Request.Host}");
+            return Results.Content(content, contentType);
         }
         catch (InvalidOperationException)
         {
@@ -112,10 +112,6 @@ internal static partial class Program
         {
             return Results.BadRequest();
         }
-        catch (IOException)
-        {
-            return Results.InternalServerError();
-        }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             return Results.NotFound();
@@ -123,6 +119,10 @@ internal static partial class Program
         catch (Exception ex) when (ex is UnauthorizedAccessException)
         {
             return Results.Forbid();
+        }
+        catch (IOException)
+        {
+            return Results.InternalServerError();
         }
     }
     
@@ -137,6 +137,7 @@ internal static partial class Program
             _ when fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") => "image/jpeg",
             _ when fileName.EndsWith(".gif") => "image/gif",
             _ when fileName.EndsWith(".svg") => "image/svg+xml",
+            _ when fileName.EndsWith(".xml") => "application/xml",
             _ => "application/octet-stream",
         };
     }
@@ -149,14 +150,21 @@ internal static partial class Program
         }
 
         // Match first "!" bang in query
-        var match = BangRegex.Match(query);
+        bool prefix = true;
+        var match = BangPrefixRegex.Match(query);
+        if (!match.Success)
+        {
+            match = BangSuffixRegex.Match(query);
+            prefix = false;
+        }
         var bangCandidate = match.Success ? match.Groups[1].Value.ToLowerInvariant() : string.Empty;
 
         // Find matching bang or use default
         var selectedBang = Engines.TryGetValue(bangCandidate, out var bang) ? bang : DefaultBang;
 
         // Remove the first bang from the query
-        string cleanQuery = BangRegex.Replace(query, "", 1).Trim();
+        string cleanQuery = (prefix ? BangPrefixRegex : BangSuffixRegex)
+            .Replace(query, "", 1).Trim();
 
         // Encode and clean URL
         string encodedQuery = HttpUtility.UrlEncode(cleanQuery).Replace("%2F", "/");
@@ -166,6 +174,9 @@ internal static partial class Program
     }
 
     [GeneratedRegex(@"!(\S+)", RegexOptions.IgnoreCase | RegexOptions.Compiled, "pl-PL")]
-    private static partial Regex BangSearchRegex();
+    private static partial Regex BangPrefixSearchRegex();
+    
+    [GeneratedRegex(@"(\S+)!", RegexOptions.IgnoreCase | RegexOptions.Compiled, "pl-PL")]
+    private static partial Regex BangSuffixSearchRegex();
 }
 
