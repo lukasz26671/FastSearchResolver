@@ -8,13 +8,37 @@ namespace FastSearchResolver;
 internal static partial class Program
 {
     private static string _defaultBangKey = null!;
-    private static readonly BangsMap Engines = BangDefinition.FromJsonArray(File.OpenRead("bang.json"))!
-        .ToImmutableDictionary(x => x.Tag, x => x, StringComparer.OrdinalIgnoreCase);
+    private static readonly BangsMap Engines;
     
     private static BangDefinition DefaultBang => Engines[_defaultBangKey];
     private static readonly Regex BangPrefixRegex = BangPrefixSearchRegex();
     private static readonly Regex BangSuffixRegex = BangSuffixSearchRegex();
     private static readonly Config Config = Config.LoadFromJson("config.json");
+
+    static Program()
+    {
+        List<BangDefinition> bangDefinitions = [];
+
+        if (File.Exists(Config.MainBangs))
+        {
+            bangDefinitions.AddRange(BangDefinition.FromJsonArray(File.OpenRead(Config.MainBangs))!);
+        }
+        if (File.Exists(Config.CustomBangs))
+        {
+            bangDefinitions.AddRange(BangDefinition.FromJsonArray(File.OpenRead(Config.CustomBangs))!);
+        }
+        
+        if(bangDefinitions.Count == 0)
+            throw new FileNotFoundException("Could not find any Bang definitions file.");
+        
+        Engines = bangDefinitions
+            .ToImmutableDictionary(x => x.Tag, x => x, StringComparer.OrdinalIgnoreCase);
+
+        _defaultBangKey = Config.DefaultBang;
+        Console.WriteLine($"Loaded {Engines.Count} usable bangs");
+        Console.WriteLine($"Using default bang key: {_defaultBangKey}");
+    }
+    
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateSlimBuilder(args);
@@ -25,8 +49,6 @@ internal static partial class Program
             options.SerializerOptions.TypeInfoResolverChain.Insert(1, ConfigJsonContext.Default);
         });
         
-        _defaultBangKey = Config.DefaultBang;
-        Console.WriteLine($"Using default bang key: {_defaultBangKey}");
         if (Config.UseCustomBind)
         {
             builder.WebHost.ConfigureKestrel(o =>

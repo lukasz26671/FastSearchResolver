@@ -1,5 +1,7 @@
 ﻿{
   "DefaultBang": "g",
+  "MainBangs": "bang.json",
+  "CustomBangs": "bang_custom.json",
   "UseCustomBind": false,
   "HttpPort": 8080,
   "HttpsPort": 8443,
