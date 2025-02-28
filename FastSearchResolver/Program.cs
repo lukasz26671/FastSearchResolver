@@ -7,10 +7,10 @@ using BangsMap = System.Collections.Generic.IDictionary<string, FastSearchResolv
 namespace FastSearchResolver;
 internal static partial class Program
 {
-    private static string _defaultBangKey = null!;
-    private static BangsMap Engines;
+    private static readonly string DefaultBangKey;
+    private static BangsMap _engines = null!;
     
-    private static BangDefinition DefaultBang => Engines[_defaultBangKey];
+    private static BangDefinition DefaultBang => _engines[DefaultBangKey];
     private static readonly Regex BangPrefixRegex = BangPrefixSearchRegex();
     private static readonly Regex BangSuffixRegex = BangSuffixSearchRegex();
     private static readonly Config Config = Config.LoadFromJson("config.json");
@@ -21,26 +21,28 @@ internal static partial class Program
 
         if (File.Exists(Config.MainBangs))
         {
-            bangDefinitions.AddRange(BangDefinition.FromJsonArray(File.OpenRead(Config.MainBangs))!);
+            using var fs = File.OpenRead(Config.MainBangs);
+            bangDefinitions.AddRange(BangDefinition.FromJsonArray(fs)!);
         }
         if (File.Exists(Config.CustomBangs))
         {
-            bangDefinitions.AddRange(BangDefinition.FromJsonArray(File.OpenRead(Config.CustomBangs))!);
+            using var fs = File.OpenRead(Config.CustomBangs);
+            bangDefinitions.AddRange(BangDefinition.FromJsonArray(fs)!);
         }
         
         if(bangDefinitions.Count == 0)
             throw new FileNotFoundException("Could not find any Bang definitions file.");
         
-        Engines = bangDefinitions
+        _engines = bangDefinitions
             .ToImmutableDictionary(x => x.Tag, x => x, StringComparer.OrdinalIgnoreCase);
 
-        Console.WriteLine($"Loaded {Engines.Count} usable bangs");
+        Console.WriteLine($"Loaded {_engines.Count} usable bangs");
     }
     static Program()
     {
-        _defaultBangKey = Config.DefaultBang;
+        DefaultBangKey = Config.DefaultBang;
         LoadBangDefinitions();
-        Console.WriteLine($"Using default bang key: {_defaultBangKey}");
+        Console.WriteLine($"Using default bang key: {DefaultBangKey}");
     }
     
     public static void Main(string[] args)
@@ -134,8 +136,11 @@ internal static partial class Program
         {
             var contentType = GetContentType(finalPath);
             if (!relativePath.EndsWith("opensearch.xml"))
-                return Results.File(new FileStream(finalPath, FileMode.Open, FileAccess.Read, FileShare.Read), contentType);
-            
+            {
+                await using var fs = new FileStream(finalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return Results.File(fs, contentType);
+            }
+
             var content = (await File.ReadAllTextAsync(finalPath)).Replace("%{PUBLIC_URL}%", $"{context.Request.Scheme}://{context.Request.Host}");
             return Results.Content(content, contentType);
         }
@@ -195,7 +200,7 @@ internal static partial class Program
         var bangCandidate = match.Success ? match.Groups[1].Value.ToLowerInvariant() : string.Empty;
 
         // Find matching bang or use default
-        var selectedBang = Engines.TryGetValue(bangCandidate, out var bang) ? bang : DefaultBang;
+        var selectedBang = _engines.TryGetValue(bangCandidate, out var bang) ? bang : DefaultBang;
 
         // Remove the first bang from the query
         string cleanQuery = (prefix ? BangPrefixRegex : BangSuffixRegex)
