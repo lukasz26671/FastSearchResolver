@@ -1,0 +1,9 @@
+﻿<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Publish-LinuxARM64" type="DotNetFolderPublish" factoryName="Publish to folder">
+    <riderPublish configuration="Release" platform="Any CPU" produce_single_file="true" runtime="linux-arm64" self_contained="true" target_folder="$PROJECT_DIR$/FastSearchResolver/bin/Release/net9.0/linux-arm64/publish" target_framework="net9.0" trim_unused_assemblies="true" uuid_high="6897905512124729402" uuid_low="-7770202413773715516" />
+    <method v="2">
+      <option name="CleanSolution" enabled="true" />
+      <option name="Build Solution" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,51 @@
+﻿<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1">    
+        <link rel="stylesheet" href="/static/global.css" type="text/css"/>
+        <title>Fast search resolver</title>
+    </head>
+    <body>
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
+            <div class="content-container">
+                <h1>Fast search resolver</h1>
+                <p>DuckDuckGo's bang redirects are too slow. Add the following URL as a custom search engine to your browser. Enables <a href="https://duckduckgo.com/bang.html" target="_blank">all of DuckDuckGo's bangs.</a></p>
+                <div class="url-container">
+                    <input
+                            type="text"
+                            class="url-input"
+                            id="url-input"
+                            value="?q=%s"
+                            readonly
+                    />
+                    <button class="copy-button">
+                        <img src="/static/clipboard.svg" alt="Copy" />
+                    </button>
+                    <script type="text/javascript">
+                        const baseUrl = window.location.origin + window.location.pathname;
+                        const finalUrl = baseUrl + "?q=%s";
+                        document.getElementById("url-input").value = finalUrl
+                        
+                        const copyButton = document.querySelector(".copy-button");
+                        const copyIcon = copyButton.querySelector("img");
+                        const urlInput = document.querySelector(".url-input");
+
+                        copyButton.addEventListener("click", async () => {
+                            await navigator.clipboard.writeText(urlInput.value);
+                            copyIcon.src = "/static/clipboard-check.svg";
+
+                            setTimeout(() => {
+                                copyIcon.src = "/static/clipboard.svg";
+                            }, 2000);
+                        });
+                    </script>                
+                </div>
+            </div>
+            <footer class="footer">
+                <span>Free to use | Self hosted | Native | Inspired by <a href="https://unduck.link/" target="_blank">unduck</a> | by <a href="https://github.com/lukasz26671" target="_blank">Lukasz26671</a></span>
+            </footer>
+        </div>
+    </body>
+    
+</html>

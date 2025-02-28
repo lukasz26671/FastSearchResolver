@@ -1,0 +1,9 @@
+﻿{
+  "DefaultBang": "g",
+  "UseCustomBind": false,
+  "HttpPort": 8080,
+  "HttpsPort": 8443,
+  "UseHttps": false,
+  "CertificatePath": "certs/cert.pfx",
+  "CertificatePassword": "your-secure-password"
+}

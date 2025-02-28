@@ -1,0 +1,11 @@
+@FastSearchResolver_HostAddress = http://localhost:5295
+
+GET {{FastSearchResolver_HostAddress}}/todos/
+Accept: application/json
+
+###
+
+GET {{FastSearchResolver_HostAddress}}/todos/1
+Accept: application/json
+
+###
