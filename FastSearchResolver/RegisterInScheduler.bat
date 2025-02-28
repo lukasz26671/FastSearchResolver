@@ -15,7 +15,7 @@ set "taskname=FastSearchResolver"
 set "program=%scriptdir%FastSearchResolver.exe"
 
 :: Create the scheduled task to run on any user logon
-schtasks /create /tn "%taskname%" /tr "\"%program%\"" /sc onlogon /rl highest /f /it /sd 01/01/2000 /st 00:00 /d *
+schtasks /create /tn "%taskname%" /tr "\"%program%\"" /sc onlogon /rl highest /f /it
 
 echo Task "%taskname%" has been created successfully.
 pause
