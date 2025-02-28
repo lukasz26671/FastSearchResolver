@@ -137,8 +137,7 @@ internal static partial class Program
             var contentType = GetContentType(finalPath);
             if (!relativePath.EndsWith("opensearch.xml"))
             {
-                await using var fs = new FileStream(finalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                return Results.File(fs, contentType);
+                return Results.File(File.OpenRead(finalPath), contentType);
             }
 
             var content = (await File.ReadAllTextAsync(finalPath)).Replace("%{PUBLIC_URL}%", $"{context.Request.Scheme}://{context.Request.Host}");
